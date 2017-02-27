@@ -1,122 +1,162 @@
-        /*
-         * まずスクリプトプロパティに以下の値を格納しておくこと。
-         * 'myMobileMail' = 運行情報送信先のメールアドレス
-         * 'obj.time' = '0'　//値は'0'でなくても構わないが、''はNG。何か値を入れること。
-         */
+/**
+ * まずスクリプトプロパティに以下の値を格納しておくこと。
+ * 'A_DST_EMAIL_ADDR' = 運行情報送信先のメールアドレス
+ * 'obj.time' = '0'  // 値は'0'でなくても構わないが、''はNG。何か値を入れること。
+ * 
+ * A script for Google Apps Script that retrieves Seibu Railway service status, 
+ *     and notifies you of that by e-mail.
+ * @author supernova1987a
+ * @copyright 2017 supernova1987a
+ * @license MIT License <https://opensource.org/licenses/mit-license.php>
+ */
 
 function run() {
     try {
         var res = UrlFetchApp.fetch('https://www.seiburailway.jp/api/v1/servicestatus.jsonp');
-        if (res.getResponseCode() !== 200) throw new Error('Not Found');
+        /** @type {boolean} */
+        var wasFailureToFetch = res.getResponseCode() !== 200;
+        if (wasFailureToFetch) throw new Error('Failed to fetch.');
         var jsonp = res.getContentText('UTF-8');
-        var json = cnvJsonpToJson(jsonp);
-        /*
-         *　obj.chk          ：(謎) ex.0
-         *  obj.status_code ：ステータスコード　ex.200
-         *  obj.text        ：運行情報のテキスト
-         *　obj.time       ：最終更新日時
-         *  obj.tif[].pif[] ：(振替輸送？)
-         *  obj.tif_all     ：(振替輸送全区間？)
-         *  obj.time        ：最終更新日時               が入るようにする。
+        var json = jsonp.cnvJsonpToJson();
+        /**
+         * obj.chk         ：(謎) ex.0
+         * obj.status_code ：ステータスコード  ex.200
+         * obj.text        ：運行情報のテキスト
+         * obj.time        ：最終更新日時
+         * obj.tif[].pif[] ：(振替輸送？)
+         * obj.tif_all     ：(振替輸送全区間？)
+         * obj.time        ：最終更新日時               が入る
          */
         var obj = JSON.parse(json).IDS2Web[0];
-        var timeFromTheProperty = PropertiesService.getScriptProperties().getProperty('obj.time');
-        //もし最終更新時刻が変わってなかったら終了。もし変わっていたら現在時刻とjsonpを記録して、メールを送信する。
-        if (obj.time == timeFromTheProperty) {
+        const TIME_FROM_THE_PROPERTY = PropertiesService.getScriptProperties().getProperty('obj.time');
+        /** @type {boolean} */
+        var isNewStatus = obj.time != TIME_FROM_THE_PROPERTY;
+        /**
+         * もし最終更新時刻が変わっていなかったら終了。
+         * もし変わっていたら現在時刻とjsonpを記録して、メールを送信する。
+         */
+        if (!isNewStatus) {
             return;
         } else {
+            /** 現在の時刻をスクリプトプロパティに格納しておく */
             PropertiesService.getScriptProperties().setProperty('obj.time', obj.time);
-            //運行情報をメールで送信する
+            /** 運行情報をメールで送信する */
             emailNotify(obj.text);
-            //デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
+            /** デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく */
             PropertiesService.getScriptProperties().setProperty('TEXT_' + now(), jsonp);
         }
-        return; //とりあえずデバッグ用に追加した。
+        return; // とりあえずデバッグ用に追加した。
     } catch(e) {
-        PropertiesService.getScriptProperties().setProperty('ERROR_' + now() + '_' + arguments.callee.name, e.toString());
+        var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
+        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
 
+/**
+ * 運行情報をメールで送信する
+ * @param {string} status 運行情報のテキストつまりobj.text
+ */
 function emailNotify(status) {
-    /*
-     * 運行情報をメールで送信する
-     * emailNotify( 運行情報のテキストつまりobj.text/String )
-     * return なし
-     */
     try {
-        var myMobileMail = PropertiesService.getScriptProperties().getProperty('myMobileMail');
-        GmailApp.sendEmail(myMobileMail, '西武鉄道運行情報β', '', {htmlBody: now() + ' 取得<br /><br />' + status});
+        const A_DST_EMAIL_ADDR = PropertiesService.getScriptProperties().getProperty('A_DST_EMAIL_ADDR');
+        GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β', '', {htmlBody: now() + ' 取得<br /><br />' + status});
     } catch(e) {
-        PropertiesService.getScriptProperties().setProperty('ERROR_' + now() + '_' + arguments.callee.name, e.toString());
+        var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
+        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
 
-function cnvJsonpToJson(jsonp) {
-    /*
-     * JSONPで書かれた文字列をJSONに変換する。Objectにパースはしてくれないように変更。
-     * cnvJsonpToJson( JSONP/String )
-     * return Json/String
-     */
+/**
+ * JSONPで書かれた文字列をJSONに変換する。
+ * Objectにパースはしてくれないように変更。
+ * @return {string} JSONフォーマットの文字列
+ * @example
+ * jsonp.cnvJsonpToJson();
+ * // return JSONフォーマットの文字列
+ */
+String.prototype.cnvJsonpToJson = function() {
     try {
-        var json = jsonp
-        //最初に「sr_servicestatus_callback(」があったらカット
+        /**
+         * this
+         * @type {string} JSONPフォーマットの文字列（もちろんJSONPフォーマットの文字列に対して使ったとき）
+         */
+        var json = this
+        /** 最初に「sr_servicestatus_callback(」があったらカット */
         .replace(/(^sr_servicestatus_callback\()?/, '')
-        //最初に「sr_emergency_callback(」があったらカット
+        /** 最初に「sr_emergency_callback(」があったらカット */
         .replace(/(^sr_emergency_callback\()?/, '')
-        //最後の「)」をカット
+        /** 最後の「)」をカット */
         .replace(/\)$/, '');
         return json;
     } catch(e) {
         var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
-        return PropertiesService.getScriptProperties().setProperty(errorKey, e.toString());
+        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
-}
-
-function now() {
-    var date = new Date();  // 現在日時を生成
-    var MM = date.getMonth() + 1;  // 月を取得（返り値は実際の月-1なので、+1する）
-    var dd = date.getDate();  // 日を取得
-    var hh = date.getHours();  // 時を取得
-    var mm = date.getMinutes();  // 分を取得
-    var w = date.getDay();  // 曜日を取得（数値）
-    // 月、日、時、分が一桁の場合は先頭に0をつける
-    if (MM < 10) {
-        MM = "0" + MM;
-    }
-    if (dd < 10) {
-        dd = "0" + dd;
-    }
-    if (hh < 10) {
-        hh = "0" + hh;
-    }
-    if (mm < 10) {
-        mm = "0" + mm;
-    }
-    // 曜日を数値から文字列に変換するための配列
-    var week = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-    // フォーマットを整える
-    var result = MM + '/' + dd + '[' + week[w] + '] ' + hh + ':' + mm;
-    return result;
 }
 
 /*
+ * フォーマットされた現在の日付と時刻を返す。
+ * @return {string} 'MM/dd[EEE] hh:mm'｜ただしEEEは大文字
+ * @example
+ * now();
+ * // return '02/27[MON] 22:37'
+ */
+function now() {
+    var date = new Date();  // 現在日時を生成
+    var obj = {
+        MM: date.getMonth() + 1,  // 月を取得（返り値は実際の月-1なので、+1する）
+        dd: date.getDate(),  // 日を取得
+        hh: date.getHours(),  // 時を取得
+        mm: date.getMinutes()  // 分を取得
+    }
+    /** 月、日、時、分が一桁の場合は先頭に0をつける */
+    for (var ii in obj) {
+        /** obj[ii]には obj.MM、obj.dd、obj.hh、obj.mm が入る */
+        if (obj[ii] < 10) {
+            obj[ii] = "0" + obj[ii].toString();
+        }
+    }
+    var EEENum = date.getDay();  // 曜日を取得（数値）
+    /** 曜日を数値から文字列に変換するための配列 */
+    var week = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    /** 曜日を数値から文字列に変換 */
+    var EEE = week[EEENum]
+    /** フォーマットを整える */
+    var result = obj.MM + '/' + obj.dd + '[' + EEE + '] ' + obj.hh + ':' + obj.mm;
+    return result;
+}
+
+/**
 function getEmergencyStatus() {
     try {
-        var obj2 = fetchStatusObj('https://www.seiburailway.jp/api/v1/emergency.jsonp')
+        var res = UrlFetchApp.fetch('https://www.seiburailway.jp/api/v1/servicestatus.jsonp');
+        ** @type {boolean} *
+        var wasFailureToFetch = res.getResponseCode() !== 200;
+        if (wasFailureToFetch) throw new Error('Failed to fetch.');
+        var jsonp = res.getContentText('UTF-8');
+        var json = jsonp.cnvJsonpToJson();
+         **
+         * obj2.chk         ：(謎) ex.1
+         * obj2.items       ：(謎) ex.null
+         * obj2.published   ：(謎 何かの文字列) ex.''
+         * obj2.status_code ：ステータスコード  ex.200
+         * obj2.text        ：(何か緊急の情報のテキスト？)
+         * obj2.text_twitter：(何か緊急の情報のテキストのツイッター用短縮版？)
+         * obj2.url         ：(関連する情報のURL？)                が入る
          *
-         *  obj2.chk         ：(謎) ex.1
-         *  obj2.items        ：(謎) ex.null
-         *  obj2.published    ：(謎 何かの文字列) ex.''
-         *  obj2.status_code ：ステータスコード　ex.200
-         *  obj2.text         ：(何か緊急の情報のテキスト？)
-         *  obj2.text_twitter ：(何か緊急の情報のテキストのツイッター用短縮版？)
-         *  obj2.url          ：(関連する情報のURL？)                が入るようにする。
-         *
-        .Emergency[0];
+        var obj2 = JSON.parse(json).Emergency[0];
         return obj2;
     } catch(e) {
         var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
-        return PropertiesService.getScriptProperties().setProperty(errorKey, e.toString());
+        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        ** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく *
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
 */
