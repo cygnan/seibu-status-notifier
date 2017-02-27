@@ -4,4 +4,4 @@ A script for Google Apps Script that retrieves Seibu Railway service status, and
 This script is under development and will continue to be modified and improved over time. The current release is an "alpha."
 
 ### License
-This software is released under the MIT License, see LICENSE.
+This script is released under the MIT License, see LICENSE.
