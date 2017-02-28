@@ -17,7 +17,7 @@ function run() {
         var wasFailureToFetch = res.getResponseCode() !== 200;
         if (wasFailureToFetch) throw new Error('Failed to fetch.');
         var jsonp = res.getContentText('UTF-8');
-        var json = jsonp.cnvJsonpToJson();
+        var json = jsonp.toJson();
         /**
          * obj.chk         ：(謎) ex.0
          * obj.status_code ：ステータスコード  ex.200
@@ -48,7 +48,8 @@ function run() {
         return; // とりあえずデバッグ用に追加した。
     } catch(e) {
         var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
-        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        var errorValue = e.name + ': ' + arguments.callee.name + '() | line '
+            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
         PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
@@ -57,15 +58,19 @@ function run() {
 /**
  * 運行情報をメールで送信する
  * @param {string} status 運行情報のテキストつまりobj.text
+ * @example emailNotify('平常運転');
+ * // A_DST_EMAIL_ADDR 宛に、本文に日付・時刻・「平常運転」が書かれたメールが送信される。
  */
-function emailNotify(status) {
+var emailNotify = function(status) {
     try {
         const A_DST_EMAIL_ADDR = PropertiesService.getScriptProperties().getProperty('A_DST_EMAIL_ADDR');
-        GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β', '', {htmlBody: now() + ' 取得<br /><br />' + status});
+        var body = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body>' + now() + ' 取得<br /><br />' + status + '</body></html>';
+        GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β', '', {htmlBody: body});
     } catch(e) {
-        var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
-        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
         /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        var errorKey = 'ERROR_' + now() + '_' + 'emailNotify';
+        var errorValue = e.name + ': ' + 'emailNotify' + '() | line '
+            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
@@ -75,10 +80,10 @@ function emailNotify(status) {
  * Objectにパースはしてくれないように変更。
  * @return {string} JSONフォーマットの文字列
  * @example
- * jsonp.cnvJsonpToJson();
+ * jsonp.toJson();
  * // return JSONフォーマットの文字列
  */
-String.prototype.cnvJsonpToJson = function() {
+String.prototype.toJson = function() {
     try {
         /**
          * this
@@ -93,8 +98,9 @@ String.prototype.cnvJsonpToJson = function() {
         .replace(/\)$/, '');
         return json;
     } catch(e) {
-        var errorKey = 'ERROR_' + now() + '_' + arguments.callee.name;
-        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
+        var errorKey = 'ERROR_' + now() + '_' + 'toJson';
+        var errorValue = e.name + ': ' + 'toJson' + '() | line '
+            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
         PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
@@ -107,7 +113,7 @@ String.prototype.cnvJsonpToJson = function() {
  * now();
  * // return '02/27[MON] 22:37'
  */
-function now() {
+var now = function() {
     var date = new Date();  // 現在日時を生成
     var obj = {
         MM: date.getMonth() + 1,  // 月を取得（返り値は実際の月-1なので、+1する）
@@ -140,7 +146,7 @@ function getEmergencyStatus() {
         var wasFailureToFetch = res.getResponseCode() !== 200;
         if (wasFailureToFetch) throw new Error('Failed to fetch.');
         var jsonp = res.getContentText('UTF-8');
-        var json = jsonp.cnvJsonpToJson();
+        var json = jsonp.toJson();
          **
          * obj2.chk         ：(謎) ex.1
          * obj2.items       ：(謎) ex.null
