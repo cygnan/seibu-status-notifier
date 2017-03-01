@@ -1,7 +1,7 @@
 /**
  * まずスクリプトプロパティに以下の値を格納しておくこと。
  * 'A_DST_EMAIL_ADDR' = 運行情報送信先のメールアドレス
- * 'obj.time' = '0'  // 値は'0'でなくても構わないが、''はNG。何か値を入れること。
+ * 'LAST_UPDATED_FROM_THE_PROPERTY' = '0'  // 値は'0'でなくても構わないが、''はNG。何か値を入れること。
  * 
  * A script for Google Apps Script that retrieves Seibu Railway service status, 
  *     and notifies you of that by e-mail.
@@ -19,18 +19,20 @@ function run() {
         var jsonp = res.getContentText('UTF-8');
         var json = jsonp.toJson();
         /**
-         * obj.chk         ：(謎) ex.0
-         * obj.status_code ：ステータスコード  ex.200
-         * obj.text        ：運行情報のテキスト
-         * obj.time        ：最終更新日時
-         * obj.tif[].pif[] ：(振替輸送？)
-         * obj.tif_all     ：(振替輸送全区間？)
-         * obj.time        ：最終更新日時               が入る
+         * obj.IDS2Web[].chk               ：0->平常時, 全て1->運転支障時 @type {number}
+         * obj.IDS2Web[].status_code       ：ステータスコード HPでは使用されず @example 200 @type {number} 
+         * obj.IDS2Web[].text              ：運行情報のテキスト @type {string}
+         * obj.IDS2Web[].tif[].pif[].ptn   ：振替輸送パターンの番号 @type {string}
+         * obj.IDS2Web[].tif_all           ：振替輸送パターンの数だと思われる。HPでは使用されず @type {number}
+         * obj.IDS2Web[0].time             ：最終更新時刻。IDS2WebPc.gifのURLクエリパラメータにのみ使われる。
+         *                                      obj.IDS2Web[0].timeのみが使われる。 @type {string}
          */
-        var obj = JSON.parse(json).IDS2Web[0];
-        const TIME_FROM_THE_PROPERTY = PropertiesService.getScriptProperties().getProperty('obj.time');
+        var obj = JSON.parse(json);
+        var lastUpdated = obj.IDS2Web[0].time;
+        const LAST_UPDATED_FROM_THE_PROPERTY = PropertiesService.getScriptProperties()
+                                                   .getProperty('LAST_UPDATED_FROM_THE_PROPERTY');
         /** @type {boolean} */
-        var isNewStatus = obj.time != TIME_FROM_THE_PROPERTY;
+        var isNewStatus = lastUpdated != LAST_UPDATED_FROM_THE_PROPERTY;
         /**
          * もし最終更新時刻が変わっていなかったら終了。
          * もし変わっていたら現在時刻とjsonpを記録して、メールを送信する。
@@ -38,10 +40,61 @@ function run() {
         if (!isNewStatus) {
             return;
         } else {
-            /** 現在の時刻をスクリプトプロパティに格納しておく */
-            PropertiesService.getScriptProperties().setProperty('obj.time', obj.time);
+            /**
+             * statusMessages[]
+             * 運行情報のテキストの配列（複数あるかもしれないので配列）
+             * @type {array}
+             */
+            var statusMessages = [];
+            /**
+             * alternativeStrs[]
+             * 振替輸送一覧の文字列({string})が入った配列
+             * @type {array}
+             */
+            var alternativeStrs = [];
+            for (var g = 0; g < obj.IDS2Web.length; g++) {
+                /** 運行情報のテキスト */
+                statusMessages[g] = obj.IDS2Web[g].text;
+                /**
+                 * IDS2Web.lengthとtif.lengthとpif.lengthは全て同じ扱い。振替輸送パターン
+                 * がどの場所に複数格納されていようと、でもHP上でのレイアウトは同じで、複
+                 * 数枚の振替輸送一覧の画像が並ぶだけ。
+                 */
+                for (var h = 0; h < obj.IDS2Web[g].tif.length; h++) {
+                    for (var j = 0; j < obj.IDS2Web[g].tif[h].pif.length; j++) {
+                        /**
+                         * alternativeNum
+                         * 振替輸送パターンの番号
+                         * @type {string}
+                         */
+                        var alternativeNum = obj.IDS2Web[g].tif[h].pif[j].ptn;
+                        /**
+                         * alternativeStr
+                         * 振替輸送一覧の文字列
+                         * @type {string}
+                         */
+                        /** 振替輸送パターンの番号を振替輸送一覧の文字列に変換する */
+                        var alternativeStr = alternativeNum.convertAlternativeNumToStr();
+                        /** 振替輸送一覧の文字列をalternativeStrs[]の末尾に追加する */
+                        alternativeStrs.push(alternativeStr);
+                    }
+                }
+            }
+
+            /**
+             * 緊急のお知らせをフェッチ
+             * もしなかったら（obj2.Emergency[0].items == nullだったら）
+             * 本文作成｜最終更新時刻＋運行情報全て＋振替輸送一覧全て
+             * あったら
+             * 本文作成｜緊急のお知らせ＋最終更新時刻＋運行情報全て＋振替輸送一覧全て
+             * 
+             * <未完成> convertAlternativeNumToStr()
+             */
+
             /** 運行情報をメールで送信する */
-            emailNotify(obj.text);
+            emailNotify(obj.IDS2Web[0].text);
+            /** 現在の時刻をスクリプトプロパティに格納しておく */
+            PropertiesService.getScriptProperties().setProperty('lastUpdated', lastUpdated);
             /** デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく */
             PropertiesService.getScriptProperties().setProperty('TEXT_' + now(), jsonp);
         }
@@ -51,26 +104,6 @@ function run() {
         var errorValue = e.name + ': ' + arguments.callee.name + '() | line '
             + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
-        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
-    }
-}
-
-/**
- * 運行情報をメールで送信する
- * @param {string} status 運行情報のテキストつまりobj.text
- * @example emailNotify('平常運転');
- * // A_DST_EMAIL_ADDR 宛に、本文に日付・時刻・「平常運転」が書かれたメールが送信される。
- */
-var emailNotify = function(status) {
-    try {
-        const A_DST_EMAIL_ADDR = PropertiesService.getScriptProperties().getProperty('A_DST_EMAIL_ADDR');
-        var body = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body>' + now() + ' 取得<br /><br />' + status + '</body></html>';
-        GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β', '', {htmlBody: body});
-    } catch(e) {
-        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
-        var errorKey = 'ERROR_' + now() + '_' + 'emailNotify';
-        var errorValue = e.name + ': ' + 'emailNotify' + '() | line '
-            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
@@ -102,6 +135,85 @@ String.prototype.toJson = function() {
         var errorValue = e.name + ': ' + 'toJson' + '() | line '
             + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
+    }
+}
+
+/**
+ * 振替輸送パターンの番号を振替輸送一覧の文字列に変換する。
+ * @return {string} 
+ * @example
+ * alternativeNum.convertAlternativeNumToStr();
+ * // return 振替輸送一覧の文字列
+ */
+String.prototype.convertAlternativeNumToStr = function() {
+    try {
+        /**
+         * this
+         * alternativeNum 振替輸送パターンの番号 {string} が入る
+         * @type {string}
+         */
+        switch (this) {
+            case '01':
+                var alternativeStr = '';
+                break;
+            case '02':
+                var alternativeStr = '';
+                break;
+            case '03':
+                var alternativeStr = '';
+                break;
+            case '04':
+                var alternativeStr = '';
+                break;
+            case '05':
+                var alternativeStr = '';
+                break;
+            case '06':
+                var alternativeStr = '';
+                break;
+            case '07':
+                var alternativeStr = '';
+                break;
+            case '08':
+                var alternativeStr = '';
+                break;
+            case '09':
+                var alternativeStr = '';
+                break;
+            case '10':
+                var alternativeStr = '';
+                break;
+            default:
+                throw new Error('alternativeNum is invalid.');
+                break;
+        }
+        return alternativeStr;
+    } catch(e) {
+        var errorKey = 'ERROR_' + now() + '_' + 'convertAlternativeNumtoStr';
+        var errorValue = e.name + ': ' + 'convertAlternativeNumtoStr' + '() | line '
+            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
+        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
+    }
+}
+
+/**
+ * 運行情報をメールで送信する
+ * @param {string} status 運行情報のテキストつまりobj.IDS2Web[0].text
+ * @example emailNotify('平常運転');
+ * // A_DST_EMAIL_ADDR 宛に、本文に日付・時刻・「平常運転」が書かれたメールが送信される。
+ */
+var emailNotify = function(status) {
+    try {
+        const A_DST_EMAIL_ADDR = PropertiesService.getScriptProperties().getProperty('A_DST_EMAIL_ADDR');
+        var body = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"></head><body>' + now() + ' 取得<br /><br />' + status + '</body></html>';
+        GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β', '', {htmlBody: body});
+    } catch(e) {
+        /** デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプトプロパティに格納しておく */
+        var errorKey = 'ERROR_' + now() + '_' + 'emailNotify';
+        var errorValue = e.name + ': ' + 'emailNotify' + '() | line '
+            + e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' + jsonp;
         PropertiesService.getScriptProperties().setProperty(errorKey, errorValue);
     }
 }
