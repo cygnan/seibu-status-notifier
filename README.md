@@ -1,6 +1,6 @@
 ﻿# seibu-status-notifier
 
-A script for Google Apps Script that retrieves Seibu Railway service status, and notifies you of that by e-mail.
+[UNRELEASED] A script for Google Apps Script that retrieves Seibu Railway service status, and notifies you of that by e-mail.
 
 **This script is currently under development.**
 
