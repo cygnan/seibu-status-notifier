@@ -45,6 +45,13 @@ function run() {
             getProperty('LAST_UPDATED_FROM_THE_PROPERTY');
         /** @type {boolean} */
         var isNewStatus = lastUpdated != LAST_UPDATED_FROM_THE_PROPERTY;
+
+        // <未>緊急のお知らせの変更も確認するようにする
+
+
+
+
+
         /*** もし最終更新時刻が変わっていなかったら終了 */
         if (!isNewStatus) {
             return;
@@ -80,25 +87,25 @@ function run() {
                         var alternativeNum = obj.IDS2Web[g].tif[h].pif[j].ptn;
                         /**
                          * alternativeText
-                         * 振替輸送一覧のテキスト
+                         * 振替輸送一覧のテキスト１つ
                          * @type {string}
                          */
-                        /**
-                         * もしalternativeNumが'01'～'10'ではなかったらcontinue
-                         * （念のためチェックすることにした）
-                         */
-                        var inInvalid1 = alternativeNum === undefined ||
-                                         alternativeNum === null ||
-                                         alternativeNum === '';
-                        if isInvalid1 continue;
-                        var isInvalid2 != alternativeNum.match(/^0[1-9]$/) ||
-                                        alternativeNum === '10';
-                        if isInvalid2 continue;
                         /**
                          * 振替輸送パターンの番号を振替輸送一覧のテキストに変換
                          */
                         var alternativeText = alternativeNum.
                                              alternativeNum2text();
+                        /**
+                         * isInvalid
+                         * もしalternativeNumが'01'～'10'ではなかったらtrue
+                         * @type {boolean}
+                         */
+                        /**
+                         * もしalternativeNumが'01'～'10'ではなかったらcontinue
+                         * （バグ防止のため念のためチェック）
+                         */
+                        var isInvalid = alternativeText === 'Invalid';
+                        if isInvalid continue;
                         /**
                          * 振替輸送一覧のテキストをalternativeTexts[]の末尾に追
                          * 加
@@ -108,38 +115,159 @@ function run() {
                 }
             }
 
+            /** 緊急のお知らせをフェッチ */
+            var resEmg = UrlFetchApp.
+                fetch('https://www.seiburailway.jp/api/v1/emergency.jsonp');
+            /** @type {boolean} */
+            var wasFailureToFetchEmg = resEmg.getResponseCode() !== 200;
+            if (wasFailureToFetchEmg) throw new Error('Failed to fetch.');
+            var jsonpEmg = resEmg.getContentText('UTF-8');
+            var jsonEmg = jsonpEmg.jsonp2json();
             /**
-             * <未>
-             * 緊急のお知らせをフェッチ
-             * もしなかったら（obj2.Emergency[0].items == nullだったら）
-
-            /**
-             * 本文作成｜最終更新時刻＋運行情報全て（＋振替輸送一覧全て）
+             * objEmg.chk                 ：不明。HPでは使用されず
+             *                              @type {number}
+             * objEmg.items               ：平常時->{null}, 運転支障時->{array}
+                                            @type {array || null}
+             * objEmg.items[].id          ：HPでは使用されず
+             * objEmg.items[].text        ：緊急のお知らせ
+                                            @type {string}
+             * objEmg.items[].text_twitter：Twitter用緊急のお知らせ？
+                                            @type {string}
+             * objEmg.items[].url         ：緊急のお知らせに関連するリンク
+                                            @type {string}
+             * objEmg.items[].importance  ：HP上での緊急のお知らせ表示の色
+                                            'emergency'->赤, 'important'->白
+                                            @type {string}
+             * objEmg.items[].target      ：リンク（objEmg.items[].url）の開き方
+                                            'anwin'->新しいウィンドウでurlを開く
+                                            'samewin'->同じウィンドウでurlを開く
+                                            @type {string}
+             * objEmg.published           ：以下全てHPでは使用されず
+             * objEmg.status_code         ：
+             * objEmg.text                ：
+             * objEmg.text_twitter        ：
+             * objEmg.url                 ：                              が入る
              */
+            var objEmg = JSON.parse(jsonEmg);
             /**
-             * noAlternative
-             * 振替輸送がないときtrue（alternativeTexts === []のときtrue）
+             * EmgMsgs[]
+             * 緊急のお知らせが複数入った配列
+             * @type {array}
+             */
+            var emgMsgs = [];
+            for (var c = 0; c < objEmg.Emergency.length; c++) {
+                /**
+                 * noEmgItemInEmgC
+                 * 緊急のお知らせが《objEmg.Emergency[c]の中に》ないときtrue
+                 * 《》-> あくまでcの場合についてのみで判断している。緊急のお知
+                 *        らせが全体としてどこにもないことを示しているわけでは
+                 *        ないことに注意されたい。
+                 * （objEmg.Emergency[c].items === nullのときtrue）
+                 * @type {boolean}
+                 */
+                var noEmgItemInEmgC = !objEmg.Emergency[c].items; //nullならtrue
+                if (noEmgItemInEmgC) {
+                    break; // for cをbreakする
+                } else {
+                    for (var f = 0; f < objEmg.Emergency[c].items.length; f++) {
+                        /**
+                         * emgText
+                         * 緊急のお知らせ
+                         * @type {string}
+                         */
+                        var emgText = objEmg.Emergency[c].items[f].text;
+                        /**
+                         * emgTextTwitter
+                         * Twitter用の緊急のお知らせ？
+                         * @type {string}
+                         */
+                        var emgTextTwitter = objEmg.Emergency[c].items[f].
+                                             text_twitter;
+                        /**
+                         * emgUrl
+                         * 緊急のお知らせに関連するリンク
+                         * @type {string}
+                         */
+                        var emgUrl = objEmg.Emergency[c].items[f].url;
+                        /**
+                         * urlIsEmpty
+                         * もしurlが空だったらtrue
+                         * （objEmg.Emergency[c].items[f].url === ''）
+                         * @type {boolean}
+                         */
+                        var urlIsEmpty = url === '';
+                        if urlIsEmpty {
+                            /**
+                             * emgMsg
+                             * 本文用にフォーマットされた緊急のお知らせ１つ
+                             * @type {string}
+                             */
+                            var emgMsg = emgText + emgTextTwitter;
+                            /**
+                             * 本文用にフォーマットされた緊急のお知らせ１つを
+                             * emgMsgs[]の末尾に追加
+                             */
+                            emgMsgs.push(emgMsg);
+                        } else { // urlが空ではないとき
+                            var absEmgUrl = emgUrl.relUrl2abs();
+                            // <未>ここ記述
+
+
+                            var emgMsg = [
+                                emgText + emgTextTwitter,
+                                ,
+                                '<a href="' + absEmgUrl + '">' + absEmgUrl +
+                                '</a>'
+                            ].join('<br />');
+                            /**
+                             * 本文用にフォーマットされた緊急のお知らせ１つを
+                             * emgMsgs[]の末尾に追加
+                             */
+                            emgMsgs.push(emgMsg);
+                        }
+                    }
+                }
+
+            }
+            /**
+             * noEmgMsgs
+             * 緊急のお知らせが《どこにも》何もないときtrue
+             * （emgMsgs === [] のまま、つまり、
+             *   objEmg.Emergency[0].items == nullだったら）
              * @type {boolean}
              */
-            var noAlternative = alternativeTexts === [];
-            switch (noAlternative) {
-                case true:
-                    var bodyWithoutHead = [
-                        formattedTime(lastUpdated) + ' 現在',
-                        ,
-                        statusMsgs.join('<br /><br />')
-                    ].join('<br />');
-                    break;
-                case false:
-                    var bodyWithoutHead = [
-                        formattedTime(lastUpdated) + ' 現在',
-                        ,
-                        statusMsgs.join('<br /><br />'),
-                        ,
-                        alternativeTexts.join('<br /><br />')
-                    ].join('<br />');
-                    break;
-            }
+            var noEmgMsgs = emgMsgs === [];
+            if noEmgMsgs {
+                /**
+                 * もしなかったら（objEmg.Emergency[0].items == nullだったら）
+                 * 本文作成｜最終更新時刻＋運行情報全て（＋振替輸送一覧全て）
+                 */
+                /**
+                 * noAlternatives
+                 * 振替輸送がないときtrue（alternativeTexts === []のときtrue）
+                 * @type {boolean}
+                 */
+                var noAlternatives = alternativeTexts === [];
+                switch (noAlternatives) {
+                    case true:
+                        var bodyWithoutHead = [
+                            formattedTime(lastUpdated) + ' 現在',
+                            ,
+                            statusMsgs.join('<br /><br />')
+                        ].join('<br />');
+                        break;
+                    case false:
+                        var bodyWithoutHead = [
+                            formattedTime(lastUpdated) + ' 現在',
+                            ,
+                            statusMsgs.join('<br /><br />'),
+                            ,
+                            alternativeTexts.join('<br /><br />')
+                        ].join('<br />');
+                        break;
+                }
+
+            } else {
 
             /**
              * <未>
@@ -147,6 +275,8 @@ function run() {
              * 本文作成｜緊急のお知らせ＋最終更新時刻＋運行情報全て
              *           ＋振替輸送一覧全て
              */
+
+            }
 
             /** 運行情報をメールで送信する */
             emailNotify(bodyWithoutHead);
@@ -232,81 +362,132 @@ String.prototype.alternativeNum2text = function() {
                     '■池袋線（池袋～飯能駅間）・西武有楽町線における振替輸送' +
                     'のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～寄居',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '都営地下鉄線　　│全線',
-                    '東武東上線　　　│全線',
-                    '東武越生線　　　│全線',
-                    '多摩モノレール線│玉川上水～立川南',
-                    '秩父鉄道線　　　│寄居～御花畑'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～寄居',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '都営地下鉄線',
+                    '・全線',
+                    '東武東上線',
+                    '・全線',
+                    '東武越生線',
+                    '・全線',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南',
+                    '秩父鉄道線',
+                    '・寄居～御花畑'
                 ].join('<br />');
                 break;
             case '02':
                 var alternativeText = [
                     '■西武新宿～本川越駅間における振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～高麗川',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '都営地下鉄線　　│全線',
-                    '東武東上線　　　│池袋～川越市',
-                    '京王線　　　　　│新宿～明大前',
-                    '京王井の頭線　　│全線',
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～高麗川',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '都営地下鉄線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～川越市',
+                    '京王線',
+                    '・新宿～明大前',
+                    '京王井の頭線',
+                    '・全線',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             case '03':
                 var alternativeText = [
                     '■所沢～飯能駅間における振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～寄居',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '東武東上線　　　│池袋～寄居',
-                    '東武越生線　　　│坂戸～越生',
-                    '秩父鉄道線　　　│寄居～御花畑'
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～寄居',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～寄居',
+                    '東武越生線',
+                    '・坂戸～越生',
+                    '秩父鉄道線',
+                    '・寄居～御花畑'
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             case '04':
                 var alternativeText = [
                     '■所沢～本川越駅間における振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～高麗川',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '東武東上線　　　│池袋～川越市',
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～高麗川',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～川越市',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             case '05':
                 var alternativeText = [
                     '■拝島線、国分寺線、多摩湖線における振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～新秋津',
-                    'ＪＲ八高線　　　│拝島～東飯能',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～新秋津',
+                    'ＪＲ八高線',
+                    '・拝島～東飯能',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             case '06':
@@ -314,58 +495,92 @@ String.prototype.alternativeNum2text = function() {
                     '■池袋線、西武秩父線（飯能～西武秩父駅間）における振替輸' +
                     '送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～寄居',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '東武東上線　　　│池袋～寄居',
-                    '東武越生線　　　│坂戸～越生',
-                    '秩父鉄道線　　　│寄居～御花畑'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～寄居',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～寄居',
+                    '東武越生線',
+                    '・坂戸～越生',
+                    '秩父鉄道線',
+                    '・寄居～御花畑'
                 ].join('<br />');
                 break;
             case '07':
                 var alternativeText = [
                     '■西武有楽町線における振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　│池袋～新宿',
-                    'ＪＲ中央線　│新宿～中野',
-                    '東京メトロ線│全線',
-                    '都営地下鉄線│全線',
-                    '東武東上線　│池袋～川越市'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ中央線',
+                    '・新宿～中野',
+                    '東京メトロ線',
+                    '・全線',
+                    '都営地下鉄線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～川越市'
                 ].join('<br />');
                 break;
             case '08':
                 var alternativeText = [
                     '■多摩川線における振替輸送のご案内',
                     ,
-                    'ＪＲ中央線　│新宿～立川',
-                    'ＪＲ武蔵野線│府中本町～西国分寺',
-                    'ＪＲ南武線　│立川～南多摩',
-                    '京王線　　　│新宿～分倍河原'
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・府中本町～西国分寺',
+                    'ＪＲ南武線',
+                    '・立川～南多摩',
+                    '京王線',
+                    '・新宿～分倍河原'
                 ].join('<br />');
                 break;
             case '09':
                 var alternativeText = [
                     '■振替輸送のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～寄居',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    'ＪＲ南武線　　　│立川～南多摩',
-                    '東京メトロ線　　│全線',
-                    '都営地下鉄線　　│全線',
-                    '東武東上線　　　│池袋～寄居',
-                    '東武越生線　　　│坂戸～越生',
-                    '京王線　　　　　│新宿～分倍河原',
-                    '京王井の頭線　　│全線',
-                    '秩父鉄道線　　　│寄居～御花畑',
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～寄居',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    'ＪＲ南武線　　　',
+                    '・立川～南多摩',
+                    '東京メトロ線',
+                    '・全線',
+                    '都営地下鉄線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～寄居',
+                    '東武越生線',
+                    '・坂戸～越生',
+                    '京王線',
+                    '・新宿～分倍河原',
+                    '京王井の頭線',
+                    '・全線',
+                    '秩父鉄道線',
+                    '・寄居～御花畑',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             case '10':
@@ -373,29 +588,42 @@ String.prototype.alternativeNum2text = function() {
                     '■池袋線（池袋～飯能駅間）・西武有楽町線における振替輸送' +
                     'のご案内',
                     ,
-                    'ＪＲ山手線　　　│池袋～新宿',
-                    'ＪＲ埼京・川越線│新宿～大宮～高麗川',
-                    'ＪＲ中央線　　　│新宿～立川',
-                    'ＪＲ武蔵野線　　│西国分寺～武蔵浦和',
-                    'ＪＲ八高線　　　│拝島～寄居',
-                    'ＪＲ青梅線　　　│立川～拝島',
-                    '東京メトロ線　　│全線',
-                    '都営地下鉄線　　│全線',
-                    '東武東上線　　　│池袋～寄居',
-                    '東武越生線　　　│坂戸～越生',
-                    '秩父鉄道線　　　│寄居～御花畑',
-                    '多摩モノレール線│玉川上水～立川南'
+                    'ＪＲ山手線',
+                    '・池袋～新宿',
+                    'ＪＲ埼京・川越線',
+                    '・新宿～大宮～高麗川',
+                    'ＪＲ中央線',
+                    '・新宿～立川',
+                    'ＪＲ武蔵野線',
+                    '・西国分寺～武蔵浦和',
+                    'ＪＲ八高線',
+                    '・拝島～寄居',
+                    'ＪＲ青梅線',
+                    '・立川～拝島',
+                    '東京メトロ線',
+                    '・全線',
+                    '都営地下鉄線',
+                    '・全線',
+                    '東武東上線',
+                    '・池袋～寄居',
+                    '東武越生線',
+                    '・坂戸～越生',
+                    '秩父鉄道線',
+                    '・寄居～御花畑',
+                    '多摩モノレール線',
+                    '・玉川上水～立川南'
                 ].join('<br />');
                 break;
             default:
-                throw new Error('alternativeNum is invalid.');
+                var alternativeText = 'Invalid';
                 break;
         }
         return alternativeText;
     } catch(e) {
-        var errorKey = 'ERROR_' + formattedTime('now') + '_' + 'alternativeNum2text';
-        var errorValue = e.name + ': ' + 'alternativeNum2text' +
-                         '() | line ' + e.lineNumber + ' | ' + e.message;
+        var errorKey = 'ERROR_' + formattedTime('now') + '_' + 
+                       'alternativeNum2text';
+        var errorValue = e.name + ': ' + 'alternativeNum2text' + '() | line ' +
+                         e.lineNumber + ' | ' + e.message;
         /**
          * デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納して
          * おく
@@ -403,6 +631,12 @@ String.prototype.alternativeNum2text = function() {
         PropertiesService.getScriptProperties().
             setProperty(errorKey, errorValue);
     }
+}
+
+String.prototype.relUrl2abs = function {
+
+    // <未>相対パスのURLを絶対パスに変更する関数を作成
+    
 }
 
 /**
@@ -506,36 +740,4 @@ var formattedTime = function(dateStr) {
     }
 }
 
-/**
-function getEmergencyStatus() {
-    try {
-        var res = UrlFetchApp
-            .fetch('https://www.seiburailway.jp/api/v1/servicestatus.jsonp');
-        ** @type {boolean} *
-        var wasFailureToFetch = res.getResponseCode() !== 200;
-        if (wasFailureToFetch) throw new Error('Failed to fetch.');
-        var jsonp = res.getContentText('UTF-8');
-        var json = jsonp.jsonp2json();
-         **
-         * obj2.chk         ：(謎) ex.1
-         * obj2.items       ：(謎) ex.null
-         * obj2.published   ：(謎 何かの文字列) ex.''
-         * obj2.status_code ：ステータスコード  ex.200
-         * obj2.text        ：(何か緊急の情報のテキスト？)
-         * obj2.text_twitter：(何か緊急の情報のテキストのツイッター用短縮版？)
-         * obj2.url         ：(関連する情報のURL？)                が入る
-         *
-        var obj2 = JSON.parse(json).Emergency[0];
-        return obj2;
-    } catch(e) {
-        var errorKey = 'ERROR_' + formattedTime('now') + '_' + arguments.callee.name;
-        var errorValue = e.toString() + '\n\nJSONP : ' + jsonp;
-        **
-         * デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
-         * プロパティに格納しておく
-         *
-        PropertiesService.getScriptProperties().
-            setProperty(errorKey, errorValue);
-    }
-}
-*/
+
