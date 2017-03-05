@@ -1,9 +1,9 @@
-/**
- * // まずスクリプトプロパティに以下の値を格納しておくこと。
- * // 'A_DST_EMAIL_ADDR' = 運行情報送信先のメールアドレス
- * // 'LAST_UPDATED_FROM_THE_PROPERTY' = '0'
- * // 値は'0'でなくても構わないが、''はNG。何か値を入れること。
- * 
+// まずスクリプトプロパティに以下の値を格納しておくこと。
+// 'A_DST_EMAIL_ADDR' = 運行情報送信先のメールアドレス
+// 'LAST_UPDATED_FROM_THE_PROPERTY' = '0'
+// 値は'0'でなくても構わないが、''はNG。何か値を入れること。
+
+/** 
  * @description [UNRELEASED] A script for Google Apps Script that retrieves
  *     Seibu Railway service status, and notifies you of that by e-mail.
  * @author supernova1987a
@@ -19,44 +19,42 @@ function run() {
         var wasFailureToFetch = res.getResponseCode() !== 200;
         if (wasFailureToFetch) throw new Error('Failed to fetch.');
         var jsonp = res.getContentText('UTF-8');
+        if (!jsonp) return; // 万一jsonpに何も入っていなかったときのバグ防止
         var json = jsonp.jsonp2json();
-        /**
-         * obj.IDS2Web[].chk             ：0->平常時, 全て1->運転支障時
-         *                                 @type {number}
-         * obj.IDS2Web[].status_code     ：ステータスコード HPでは使用されず
-         *                                 @example 200
-         *                                 @type {number} 
-         * obj.IDS2Web[].text            ：運行情報のテキスト
-         *                                 @type {string}
-         * obj.IDS2Web[].tif[].pif[].ptn ：振替輸送パターンの番号
-         *                                 @type {string}
-         * obj.IDS2Web[].tif_all         ：振替輸送パターンの数だと思われる。HP
-         *                                 では使用されず
-         *                                 @type {number}
-         * obj.IDS2Web[0].time           ：最終更新時刻。IDS2WebPc.gifのURLクエ
-         *                                 リパラメータにのみ使われる。
-         *                                 obj.IDS2Web[0].timeのみが使われる。
-         *                                 @type {string}
-         */
+
+        // obj.IDS2Web[].chk             ：0->平常時, 全て1->運転支障時
+        //                                 @type {number}
+        // obj.IDS2Web[].status_code     ：ステータスコード HPでは使用されず
+        //                                 @example 200
+        //                                 @type {number} 
+        // obj.IDS2Web[].text            ：運行情報のテキスト
+        //                                 @type {string}
+        // obj.IDS2Web[].tif[].pif[].ptn ：振替輸送パターンの番号
+        //                                 @type {string}
+        // obj.IDS2Web[].tif_all         ：振替輸送パターンの数だと思われる。HP
+        //                                 では使用されず
+        //                                 @type {number}
+        // obj.IDS2Web[0].time           ：最終更新時刻。IDS2WebPc.gifのURLクエ
+        //                                 リパラメータにのみ使われる。
+        //                                 obj.IDS2Web[0].timeのみが使われる。
+        //                                 @type {string}
+
         var obj = JSON.parse(json);
+        // 万一obj.IDS2Web、obj.IDS2Web[0]、obj.IDS2Web[0].timeに何も入っていな
+        // かったときのバグ防止（HPを見る限りはありえないが念のためチェック）
+        if (!obj.IDS2Web || !obj.IDS2Web[0] || !obj.IDS2Web[0].time) return;
         var lastUpdated = obj.IDS2Web[0].time;
         const LAST_UPDATED_FROM_THE_PROPERTY =
             PropertiesService.getScriptProperties().
             getProperty('LAST_UPDATED_FROM_THE_PROPERTY');
         /** @type {boolean} */
-        var isNewStatus = lastUpdated != LAST_UPDATED_FROM_THE_PROPERTY;
-
-        // <未>緊急のお知らせの変更も確認するようにする
-
-
-
-
-
-        /*** もし最終更新時刻が変わっていなかったら終了 */
+        var isNewStatus = lastUpdated != LAST_UPDATED_FROM_THE_PROPERTY; 
+      
+        // もし最終更新時刻が変わっていなかったら終了
         if (!isNewStatus) {
             return;
         } else {
-            /** ここから最終更新時刻が変わっていた場合 */
+            // ここから最終更新時刻が変わっていた場合
             /**
              * statusMsgs[]
              * 運行情報のテキストが複数入った配列
@@ -70,15 +68,20 @@ function run() {
              */
             var alternativeTexts = [];
             for (var g = 0; g < obj.IDS2Web.length; g++) {
-                /** 運行情報のテキスト */
-                statusMsgs[g] = obj.IDS2Web[g].text;
-                /**
-                 * IDS2Web.lengthとtif.lengthとpif.lengthは全て同じ扱い。振替輸
-                 * 送パターンがどの場所に複数格納されていようと、でもHP上でのレ
-                 * イアウトは同じで、複数枚の振替輸送一覧の画像が並ぶだけ。
-                 */
+                // 万一obj.IDS2Web[g].textに何も入っていなかったときのバグ防止
+                // （HPを見る限りはありえないが念のためチェック）
+                if (obj.IDS2Web[g].text) {
+                    statusMsgs.push(obj.IDS2Web[g].text); // 運行情報のテキスト
+                }
+                // IDS2Web.lengthとtif.lengthとpif.lengthは全て同じ扱い。振替輸
+                // 送パターンがどの場所に複数格納されていようと、でもHP上でのレ
+                // イアウトは同じで、複数枚の振替輸送一覧の画像が並ぶだけ。
                 for (var h = 0; h < obj.IDS2Web[g].tif.length; h++) {
                     for (var j = 0; j < obj.IDS2Web[g].tif[h].pif.length; j++) {
+                        // 万一obj.IDS2Web[g].tif[h].pif[j].ptnに何も入っていな
+                        // かったときのバグ防止（HPを見る限りはありえないが念の
+                        // ためチェック）
+                        if (!obj.IDS2Web[g].tif[h].pif[j].ptn) continue;
                         /**
                          * alternativeNum
                          * 振替輸送パターンの番号
@@ -90,22 +93,18 @@ function run() {
                          * 振替輸送一覧のテキスト１つ
                          * @type {string}
                          */
-                        /**
-                         * 振替輸送パターンの番号を振替輸送一覧のテキストに変換
-                         */
+                        // 振替輸送パターンの番号を振替輸送一覧のテキストに変換
                         var alternativeText = alternativeNum.
-                                             alternativeNum2text();
+                                              alternativeNum2text();
                         /**
                          * isInvalid
                          * もしalternativeNumが'01'～'10'ではなかったらtrue
                          * @type {boolean}
                          */
-                        /**
-                         * もしalternativeNumが'01'～'10'ではなかったらcontinue
-                         * （バグ防止のため念のためチェック）
-                         */
+                        // もしalternativeNumが'01'～'10'ではなかったらcontinue
+                        // （バグ防止のため念のためチェック）
                         var isInvalid = alternativeText === 'Invalid';
-                        if isInvalid continue;
+                        if (isInvalid) continue;
                         /**
                          * 振替輸送一覧のテキストをalternativeTexts[]の末尾に追
                          * 加
@@ -115,177 +114,37 @@ function run() {
                 }
             }
 
-            /** 緊急のお知らせをフェッチ */
-            var resEmg = UrlFetchApp.
-                fetch('https://www.seiburailway.jp/api/v1/emergency.jsonp');
-            /** @type {boolean} */
-            var wasFailureToFetchEmg = resEmg.getResponseCode() !== 200;
-            if (wasFailureToFetchEmg) throw new Error('Failed to fetch.');
-            var jsonpEmg = resEmg.getContentText('UTF-8');
-            var jsonEmg = jsonpEmg.jsonp2json();
             /**
-             * objEmg.chk                 ：不明。HPでは使用されず
-             *                              @type {number}
-             * objEmg.items               ：平常時->{null}, 運転支障時->{array}
-                                            @type {array || null}
-             * objEmg.items[].id          ：HPでは使用されず
-             * objEmg.items[].text        ：緊急のお知らせ
-                                            @type {string}
-             * objEmg.items[].text_twitter：Twitter用緊急のお知らせ？
-                                            @type {string}
-             * objEmg.items[].url         ：緊急のお知らせに関連するリンク
-                                            @type {string}
-             * objEmg.items[].importance  ：HP上での緊急のお知らせ表示の色
-                                            'emergency'->赤, 'important'->白
-                                            @type {string}
-             * objEmg.items[].target      ：リンク（objEmg.items[].url）の開き方
-                                            'anwin'->新しいウィンドウでurlを開く
-                                            'samewin'->同じウィンドウでurlを開く
-                                            @type {string}
-             * objEmg.published           ：以下全てHPでは使用されず
-             * objEmg.status_code         ：
-             * objEmg.text                ：
-             * objEmg.text_twitter        ：
-             * objEmg.url                 ：                              が入る
-             */
-            var objEmg = JSON.parse(jsonEmg);
-            /**
-             * EmgMsgs[]
-             * 緊急のお知らせが複数入った配列
-             * @type {array}
-             */
-            var emgMsgs = [];
-            for (var c = 0; c < objEmg.Emergency.length; c++) {
-                /**
-                 * noEmgItemInEmgC
-                 * 緊急のお知らせが《objEmg.Emergency[c]の中に》ないときtrue
-                 * 《》-> あくまでcの場合についてのみで判断している。緊急のお知
-                 *        らせが全体としてどこにもないことを示しているわけでは
-                 *        ないことに注意されたい。
-                 * （objEmg.Emergency[c].items === nullのときtrue）
-                 * @type {boolean}
-                 */
-                var noEmgItemInEmgC = !objEmg.Emergency[c].items; //nullならtrue
-                if (noEmgItemInEmgC) {
-                    break; // for cをbreakする
-                } else {
-                    for (var f = 0; f < objEmg.Emergency[c].items.length; f++) {
-                        /**
-                         * emgText
-                         * 緊急のお知らせ
-                         * @type {string}
-                         */
-                        var emgText = objEmg.Emergency[c].items[f].text;
-                        /**
-                         * emgTextTwitter
-                         * Twitter用の緊急のお知らせ？
-                         * @type {string}
-                         */
-                        var emgTextTwitter = objEmg.Emergency[c].items[f].
-                                             text_twitter;
-                        /**
-                         * emgUrl
-                         * 緊急のお知らせに関連するリンク
-                         * @type {string}
-                         */
-                        var emgUrl = objEmg.Emergency[c].items[f].url;
-                        /**
-                         * urlIsEmpty
-                         * もしurlが空だったらtrue
-                         * （objEmg.Emergency[c].items[f].url === ''）
-                         * @type {boolean}
-                         */
-                        var urlIsEmpty = url === '';
-                        if urlIsEmpty {
-                            /**
-                             * emgMsg
-                             * 本文用にフォーマットされた緊急のお知らせ１つ
-                             * @type {string}
-                             */
-                            var emgMsg = emgText + emgTextTwitter;
-                            /**
-                             * 本文用にフォーマットされた緊急のお知らせ１つを
-                             * emgMsgs[]の末尾に追加
-                             */
-                            emgMsgs.push(emgMsg);
-                        } else { // urlが空ではないとき
-                            var absEmgUrl = emgUrl.relUrl2abs();
-                            // <未>ここ記述
-
-
-                            var emgMsg = [
-                                emgText + emgTextTwitter,
-                                ,
-                                '<a href="' + absEmgUrl + '">' + absEmgUrl +
-                                '</a>'
-                            ].join('<br />');
-                            /**
-                             * 本文用にフォーマットされた緊急のお知らせ１つを
-                             * emgMsgs[]の末尾に追加
-                             */
-                            emgMsgs.push(emgMsg);
-                        }
-                    }
-                }
-
-            }
-            /**
-             * noEmgMsgs
-             * 緊急のお知らせが《どこにも》何もないときtrue
-             * （emgMsgs === [] のまま、つまり、
-             *   objEmg.Emergency[0].items == nullだったら）
+             * noAlternatives
+             * 振替輸送がないときtrue（alternativeTexts === []のときtrue）
              * @type {boolean}
              */
-            var noEmgMsgs = emgMsgs === [];
-            if noEmgMsgs {
-                /**
-                 * もしなかったら（objEmg.Emergency[0].items == nullだったら）
-                 * 本文作成｜最終更新時刻＋運行情報全て（＋振替輸送一覧全て）
-                 */
-                /**
-                 * noAlternatives
-                 * 振替輸送がないときtrue（alternativeTexts === []のときtrue）
-                 * @type {boolean}
-                 */
-                var noAlternatives = alternativeTexts === [];
-                switch (noAlternatives) {
-                    case true:
-                        var bodyWithoutHead = [
-                            formattedTime(lastUpdated) + ' 現在',
-                            ,
-                            statusMsgs.join('<br /><br />')
-                        ].join('<br />');
-                        break;
-                    case false:
-                        var bodyWithoutHead = [
-                            formattedTime(lastUpdated) + ' 現在',
-                            ,
-                            statusMsgs.join('<br /><br />'),
-                            ,
-                            alternativeTexts.join('<br /><br />')
-                        ].join('<br />');
-                        break;
-                }
-
-            } else {
-
-            /**
-             * <未>
-             * 緊急のお知らせがあったら
-             * 本文作成｜緊急のお知らせ＋最終更新時刻＋運行情報全て
-             *           ＋振替輸送一覧全て
-             */
-
+            var noAlternatives = alternativeTexts === [];
+            switch (noAlternatives) {
+                case true: // 振替輸送がないとき
+                    var bodyWithoutHead = [
+                        formattedTime(lastUpdated) + ' 現在',
+                        ,
+                        statusMsgs.join('<br /><br />')
+                    ].join('<br />');
+                    break;
+                case false: // 振替輸送が１つ以上あるとき
+                    var bodyWithoutHead = [
+                        formattedTime(lastUpdated) + ' 現在',
+                        ,
+                        statusMsgs.join('<br /><br />'),
+                        ,
+                        alternativeTexts.join('<br /><br />')
+                    ].join('<br />');
+                    break;
             }
 
-            /** 運行情報をメールで送信する */
+            // 運行情報をメールで送信する
             emailNotify(bodyWithoutHead);
-            /** 現在の時刻をスクリプトプロパティに格納しておく */
+            // 現在の時刻をスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
                 setProperty('lastUpdated', lastUpdated);
-            /**
-             * デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
-             */
+            // デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
                 setProperty('TEXT_' + formattedTime('now'), jsonp);
         }
@@ -295,10 +154,8 @@ function run() {
         var errorValue = e.name + ': ' + arguments.callee.name + '() | line ' +
                          e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' +
                          jsonp;
-        /**
-         * デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
-         * プロパティに格納しておく
-         */
+        // デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
+        // プロパティに格納しておく
         PropertiesService.getScriptProperties().
             setProperty(errorKey, errorValue);
     }
@@ -314,18 +171,16 @@ function run() {
  */
 String.prototype.jsonp2json = function() {
     try {
-        /**
-         * this
-         * JSONPフォーマットの文字列
-         * (もちろんJSONPフォーマットの文字列に対して使ったとき)
-         * @type {string}
-         */
+         // this
+         // JSONPフォーマットの文字列
+         // (もちろんJSONPフォーマットの文字列に対して使ったとき)
+         // @type {string}
         var json = this.
-                   /** 最初に「sr_servicestatus_callback(」があったらカット */
+                   // 最初に「sr_servicestatus_callback(」があったらカット
                    replace(/(^sr_servicestatus_callback\()?/, '').
-                   /** 最初に「sr_emergency_callback(」があったらカット */
+                   // 最初に「sr_emergency_callback(」があったらカット
                    replace(/(^sr_emergency_callback\()?/, '').
-                   /** 最後の「)」をカット */
+                   // 最後の「)」をカット
                    replace(/\)$/, '');
         return json;
     } catch(e) {
@@ -333,10 +188,8 @@ String.prototype.jsonp2json = function() {
         var errorValue = e.name + ': ' + 'jsonp2json' + '() | line ' +
                          e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' +
                          this;
-        /**
-         * デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
-         * プロパティに格納しておく
-         */
+        // デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
+        // プロパティに格納しておく
         PropertiesService.getScriptProperties().
             setProperty(errorKey, errorValue);
     }
@@ -351,11 +204,9 @@ String.prototype.jsonp2json = function() {
  */
 String.prototype.alternativeNum2text = function() {
     try {
-        /**
-         * this
-         * alternativeNum 振替輸送パターンの番号 {string} が入る
-         * @type {string}
-         */
+         // this
+         // alternativeNum 振替輸送パターンの番号 {string} が入る
+         // @type {string}
         switch (this) {
             case '01':
                 var alternativeText = [
@@ -441,7 +292,7 @@ String.prototype.alternativeNum2text = function() {
                     '東武越生線',
                     '・坂戸～越生',
                     '秩父鉄道線',
-                    '・寄居～御花畑'
+                    '・寄居～御花畑',
                     '多摩モノレール線',
                     '・玉川上水～立川南'
                 ].join('<br />');
@@ -624,19 +475,11 @@ String.prototype.alternativeNum2text = function() {
                        'alternativeNum2text';
         var errorValue = e.name + ': ' + 'alternativeNum2text' + '() | line ' +
                          e.lineNumber + ' | ' + e.message;
-        /**
-         * デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納して
-         * おく
-         */
+        //　デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納して
+        // おく
         PropertiesService.getScriptProperties().
             setProperty(errorKey, errorValue);
     }
-}
-
-String.prototype.relUrl2abs = function {
-
-    // <未>相対パスのURLを絶対パスに変更する関数を作成
-    
 }
 
 /**
@@ -656,10 +499,8 @@ var emailNotify = function(bodyWithoutHead) {
         GmailApp.sendEmail(A_DST_EMAIL_ADDR, '西武鉄道運行情報β',
                            '', {htmlBody: body});
     } catch(e) {
-        /**
-         * デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納し
-         * ておく
-         */
+        // デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納し
+        // ておく
         var errorKey = 'ERROR_' + formattedTime('now') + '_' + 'emailNotify';
         var errorValue = e.name + ': ' + 'emailNotify' + '() | line ' +
                          e.lineNumber + ' | ' + e.message;
@@ -668,7 +509,7 @@ var emailNotify = function(bodyWithoutHead) {
     }
 }
 
-/*
+/**
  * フォーマットされた日付と時刻を返す。
  * @param {?string} dateStr
  *     引数なし || 'now' -> 現在日時をフォーマットしてから返す。
@@ -682,28 +523,26 @@ var emailNotify = function(bodyWithoutHead) {
  */
 var formattedTime = function(dateStr) {
     try {
-        switch(dateStr) {
-            case undefined: // 引数がないとき。このままcase 'now':が実行される。
-            case 'now':
-                var date = new Date(); // 現在日時を生成
-                break;
-            default:
-                /**
-                 * dateStr4newDate
-                 * new Date() に入れられるようにフォーマットされた日時
-                 * @type {string}
-                 * @example '2017/02/28 17:37'
-                 */
-                var dateStr4newDate = dateStr.slice(0,4) + '/' +
-                                      dateStr.slice(4,6) + '/' +
-                                      dateStr.slice(6,8) + ' ' +
-                                      dateStr.slice(8,10) + ':' +
-                                      dateStr.slice(10,12);
-                var date = new Date(dateStr4newDate); // 与えられた日時を生成
-                /** @type {boolean} */
-                var isAnInvalidDate = date.toString() == "Invalid Date";
-                if (isAnInvalidDate) throw new Error('dateStr is invalid.');
-                break;
+        if (!dateStr || dateStr === 'now') {
+            var date = new Date(); // 現在日時を生成
+            break;
+        } else {
+            /**
+             * dateStr4newDate
+             * new Date() に入れられるようにフォーマットされた日時
+             * @type {string}
+             * @example '2017/02/28 17:37'
+             */
+            var dateStr4newDate = dateStr.slice(0,4) + '/' +
+                                  dateStr.slice(4,6) + '/' +
+                                  dateStr.slice(6,8) + ' ' +
+                                  dateStr.slice(8,10) + ':' +
+                                  dateStr.slice(10,12);
+            var date = new Date(dateStr4newDate); // 与えられた日時を生成
+            /** @type {boolean} */
+            var isAnInvalidDate = date.toString() == "Invalid Date";
+            if (isAnInvalidDate) throw new Error('dateStr is invalid.');
+            break;
         }
         var obj = {
             MM: date.getMonth() + 1, // 月を取得（返り値は実際の月-1なので、+1する）
@@ -711,27 +550,25 @@ var formattedTime = function(dateStr) {
             hh: date.getHours(), // 時を取得
             mm: date.getMinutes() // 分を取得
         }
-        /** 月、日、時、分が一桁の場合は先頭に0をつける */
+        // 月、日、時、分が一桁の場合は先頭に0をつける
         for (var ii in obj) {
-            /** obj[ii]には obj.MM、obj.dd、obj.hh、obj.mm が入る */
+            // obj[ii]には obj.MM、obj.dd、obj.hh、obj.mm が入る
             if (obj[ii] < 10) {
                 obj[ii] = "0" + obj[ii].toString();
             }
         }
         var EEENum = date.getDay(); // 曜日を取得（数値）
-        /** 曜日を数値から文字列に変換するための配列 */
+        // 曜日を数値から文字列に変換するための配列
         var week = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
-        /** 曜日を数値から文字列に変換 */
+        // 曜日を数値から文字列に変換
         var EEE = week[EEENum];
-        /** フォーマットを整える */
+        // フォーマットを整える
         var result = obj.MM + '/' + obj.dd + '[' + EEE + '] ' + obj.hh + ':' +
                      obj.mm;
         return result;
     } catch(e) {
-        /**
-         * デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納して
-         * おく
-         */
+        // デバッグ用｜エラーメッセージをそのままスクリプトプロパティに格納して
+        // おく
         var errorKey = 'ERROR_' + formattedTime('now') + '_' + 'formattedTime';
         var errorValue = e.name + ': ' + 'formattedTime' + '() | line ' +
                          e.lineNumber + ' | ' + e.message;
@@ -739,5 +576,3 @@ var formattedTime = function(dateStr) {
             setProperty(errorKey, errorValue);
     }
 }
-
-
