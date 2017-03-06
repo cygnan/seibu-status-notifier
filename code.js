@@ -116,10 +116,10 @@ function run() {
 
             /**
              * noAlternatives
-             * 振替輸送がないときtrue（alternativeTexts === []のときtrue）
+             * 振替輸送がないときtrue（alternativeTextsが空配列であるときtrue）
              * @type {boolean}
              */
-            var noAlternatives = alternativeTexts === [];
+            var noAlternatives = alternativeTexts.length == 0;
             switch (noAlternatives) {
                 case true: // 振替輸送がないとき
                     var bodyWithoutHead = [
@@ -150,10 +150,21 @@ function run() {
         }
         return; // とりあえずデバッグ用に追加した。
     } catch(e) {
-        var errorKey = 'ERROR_' + formattedTime('now') + '_' + arguments.callee.name;
+        var errorKey = 'ERROR_' + formattedTime('now') + '_' + 
+                       arguments.callee.name;
         var errorValue = e.name + ': ' + arguments.callee.name + '() | line ' +
                          e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' +
                          jsonp;
+        /**
+         * isFetchingError
+         * いつものフェッチ時の予期せぬエラーならTrue
+         * @type {boolean}
+         */
+        isFetchingError = errorValue === 'Exception: run() | line 16 | Unexpe' +
+            'cted error: https://www.seiburailway.jp/api/v1/servicestatus.jso' +
+            'np\n\nJSONP : undefined';
+        // いつものフェッチ時の予期せぬエラーは記録から除外したいので return
+        if (isFetchingError) return;
         // デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
         // プロパティに格納しておく
         PropertiesService.getScriptProperties().
