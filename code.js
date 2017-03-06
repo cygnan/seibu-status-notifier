@@ -171,11 +171,14 @@ function run() {
  */
 String.prototype.jsonp2json = function() {
     try {
-         // this
-         // JSONPフォーマットの文字列
-         // (もちろんJSONPフォーマットの文字列に対して使ったとき)
-         // @type {string}
-        var json = this.
+        /**
+         * jsonp
+         * JSONPフォーマットの文字列
+         * (もちろんこのメソッドをJSONPフォーマットの文字列に対して使ったとき)
+         * @type {string}
+         */
+        var jsonp = this.toString();
+        var json = jsonp.
                    // 最初に「sr_servicestatus_callback(」があったらカット
                    replace(/(^sr_servicestatus_callback\()?/, '').
                    // 最初に「sr_emergency_callback(」があったらカット
@@ -187,7 +190,7 @@ String.prototype.jsonp2json = function() {
         var errorKey = 'ERROR_' + formattedTime('now') + '_' + 'jsonp2json';
         var errorValue = e.name + ': ' + 'jsonp2json' + '() | line ' +
                          e.lineNumber + ' | ' + e.message + '\n\nJSONP : ' +
-                         this;
+                         jsonp;
         // デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
         // プロパティに格納しておく
         PropertiesService.getScriptProperties().
@@ -204,10 +207,13 @@ String.prototype.jsonp2json = function() {
  */
 String.prototype.alternativeNum2text = function() {
     try {
-         // this
-         // alternativeNum 振替輸送パターンの番号 {string} が入る
-         // @type {string}
-        switch (this) {
+        /**
+         * alternativeNum
+         * 振替輸送パターンの番号
+         * @type {string}
+         */
+        var alternativeNum = this.toString();
+        switch (alternativeNum) {
             case '01':
                 var alternativeText = [
                     '■池袋線（池袋～飯能駅間）・西武有楽町線における振替輸送' +
@@ -523,7 +529,7 @@ var emailNotify = function(bodyWithoutHead) {
  */
 var formattedTime = function(dateStr) {
     try {
-        if (!dateStr || dateStr === 'now') {
+        if (!dateStr || dateStr === 'now') { // 引数なし || 引数が 'now' のとき
             var date = new Date(); // 現在日時を生成
         } else {
             /**
@@ -543,7 +549,7 @@ var formattedTime = function(dateStr) {
             if (isAnInvalidDate) throw new Error('dateStr is invalid.');
         }
         var obj = {
-            MM: date.getMonth() + 1, // 月を取得（返り値は実際の月-1なので、+1する）
+            MM: date.getMonth() + 1, // 月を取得（実際の月にするために+1する）
             dd: date.getDate(), // 日を取得
             hh: date.getHours(), // 時を取得
             mm: date.getMinutes() // 分を取得
@@ -553,6 +559,10 @@ var formattedTime = function(dateStr) {
             // obj[ii]には obj.MM、obj.dd、obj.hh、obj.mm が入る
             if (obj[ii] < 10) {
                 obj[ii] = "0" + obj[ii].toString();
+            } else {
+                // 既に２桁だった場合は数値のままなので、念のため文字列に変換し
+                // ておく。
+                obj[ii] = obj[ii].toString();
             }
         }
         var EEENum = date.getDay(); // 曜日を取得（数値）
