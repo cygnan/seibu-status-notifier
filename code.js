@@ -143,7 +143,7 @@ function run() {
             emailNotify(bodyWithoutHead);
             // 現在の時刻をスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
-                setProperty('lastUpdated', lastUpdated);
+                setProperty('LAST_UPDATED_FROM_THE_PROPERTY', lastUpdated);
             // デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
                 setProperty('TEXT_' + formattedTime('now'), jsonp);
@@ -525,7 +525,6 @@ var formattedTime = function(dateStr) {
     try {
         if (!dateStr || dateStr === 'now') {
             var date = new Date(); // 現在日時を生成
-            break;
         } else {
             /**
              * dateStr4newDate
@@ -542,7 +541,6 @@ var formattedTime = function(dateStr) {
             /** @type {boolean} */
             var isAnInvalidDate = date.toString() == "Invalid Date";
             if (isAnInvalidDate) throw new Error('dateStr is invalid.');
-            break;
         }
         var obj = {
             MM: date.getMonth() + 1, // 月を取得（返り値は実際の月-1なので、+1する）
