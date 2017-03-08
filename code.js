@@ -4,8 +4,8 @@
 // 値は'0'でなくても構わないが、''はNG。何か値を入れること。
 
 /** 
- * @description [UNRELEASED] A script for Google Apps Script that retrieves
- *     Seibu Railway service status, and notifies you of that by e-mail.
+ * @description [UNRELEASED] A script for Google Apps Script to retrieve Seibu
+ *     Railway service status and notify the user via e-mail.
  * @author supernova1987a
  * @copyright 2017 supernova1987a
  * @license MIT License <https://opensource.org/licenses/mit-license.php>
