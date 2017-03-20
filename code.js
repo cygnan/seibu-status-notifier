@@ -157,7 +157,7 @@ function run() {
                          jsonp;
         /**
          * isFetchingError
-         * いつものフェッチ時の予期せぬエラーならTrue
+         * いつものフェッチ時の予期せぬエラーならtrue
          * @type {boolean}
          */
         isFetchingError = errorValue === 'Exception: run() | line 16 | Unexpe' +
@@ -503,8 +503,7 @@ String.prototype.alternativeNum2text = function() {
  * 運行情報をメールで送信する
  * @param {string} bodyWithoutHead 送信メール本文（<body></body>で囲まれた部分）
  * @example emailNotify('平常運転');
- * // A_DST_EMAIL_ADDR 宛に、本文に日付・時刻・「平常運転」が書かれたメールが送
- * // 信される。
+ * // A_DST_EMAIL_ADDR 宛に、本文に「平常運転」が書かれたメールが送信される。
  */
 var emailNotify = function(bodyWithoutHead) {
     try {
