@@ -160,9 +160,9 @@ function run() {
          * いつものフェッチ時の予期せぬエラーならtrue
          * @type {boolean}
          */
-        isFetchingError = errorValue === 'Exception: run() | line 16 | Unexpe' +
-            'cted error: https://www.seiburailway.jp/api/v1/servicestatus.jso' +
-            'np\n\nJSONP : undefined';
+        var isFetchingError = errorValue === 'Exception: run() | line 16 | Un' +
+            'expected error: https://www.seiburailway.jp/api/v1/servicestatus' +
+            '.jsonp\n\nJSONP : undefined';
         // いつものフェッチ時の予期せぬエラーは記録から除外したいので return
         if (isFetchingError) return;
         // デバッグ用｜エラーメッセージとそのときのJSONPの値をそのままスクリプト
