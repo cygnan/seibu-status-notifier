@@ -120,23 +120,20 @@ function run() {
              * @type {boolean}
              */
             var noAlternatives = alternativeTexts.length == 0;
-            switch (noAlternatives) {
-                case true: // 振替輸送がないとき
-                    var bodyWithoutHead = [
-                        formattedTime(lastUpdated) + ' 現在',
-                        ,
-                        statusMsgs.join('<br /><br />')
-                    ].join('<br />');
-                    break;
-                case false: // 振替輸送が１つ以上あるとき
-                    var bodyWithoutHead = [
-                        formattedTime(lastUpdated) + ' 現在',
-                        ,
-                        statusMsgs.join('<br /><br />'),
-                        ,
-                        alternativeTexts.join('<br /><br />')
-                    ].join('<br />');
-                    break;
+            if (noAlternatives) { // 振替輸送がないとき
+                var bodyWithoutHead = [
+                    formattedTime(lastUpdated) + ' 現在',
+                    ,
+                    statusMsgs.join('<br /><br />')
+                ].join('<br />');
+            } else { // 振替輸送が１つ以上あるとき
+                var bodyWithoutHead = [
+                    formattedTime(lastUpdated) + ' 現在',
+                    ,
+                    statusMsgs.join('<br /><br />'),
+                    ,
+                    alternativeTexts.join('<br /><br />')
+                ].join('<br />');
             }
 
             // 運行情報をメールで送信する
