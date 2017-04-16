@@ -6,8 +6,8 @@
 /** 
  * @description [UNRELEASED] A script for Google Apps Script to retrieve Seibu
  *     Railway service status and notify the user via e-mail.
- * @author supernova1987a
- * @copyright 2017 supernova1987a
+ * @author Cygnan
+ * @copyright 2017 Cygnan
  * @license MIT License <https://opensource.org/licenses/mit-license.php>
  */
 

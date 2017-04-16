@@ -1,6 +1,6 @@
 ﻿MIT License
 
-Copyright (c) 2017 supernova1987a
+Copyright (c) 2017 Cygnan
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

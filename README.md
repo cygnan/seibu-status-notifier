@@ -7,5 +7,5 @@
 
 ## License
 
-Copyright &copy; 2017 supernova1987a  
+Copyright &copy; 2017 Cygnan  
 Licensed under the MIT License, see [LICENSE.md](LICENSE.md).
