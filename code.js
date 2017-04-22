@@ -136,14 +136,30 @@ function run() {
                 ].join('<br />');
             }
 
-            // 運行情報をメールで送信する
-            emailNotify(bodyWithoutHead);
+            const BODY_WITHOUT_HEAD_FROM_THE_PROPERTY =
+                PropertiesService.getScriptProperties().
+                getProperty('BODY_WITHOUT_HEAD_FROM_THE_PROPERTY');
+
+            var isNewBody =
+                bodyWithoutHead != BODY_WITHOUT_HEAD_FROM_THE_PROPERTY;
+
+            if(isNewBody) { // もし運行情報が変わっていたら以下を実行する
+                // 運行情報をメールで送信する
+                emailNotify(bodyWithoutHead);
+                // デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
+                PropertiesService.getScriptProperties().
+                    setProperty('TEXT_' + formattedTime('now'), jsonp);
+                // 現在の運行情報をスクリプトプロパティに格納しておく
+                PropertiesService.getScriptProperties().
+                    setProperty('BODY_WITHOUT_HEAD_FROM_THE_PROPERTY',
+                                lastUpdated);
+            }
+
             // 現在の時刻をスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
                 setProperty('LAST_UPDATED_FROM_THE_PROPERTY', lastUpdated);
-            // デバッグ用｜JSONPの値をそのままスクリプトプロパティに格納しておく
-            PropertiesService.getScriptProperties().
-                setProperty('TEXT_' + formattedTime('now'), jsonp);
+
+            
         }
         return; // とりあえずデバッグ用に追加した。
     } catch(e) {
