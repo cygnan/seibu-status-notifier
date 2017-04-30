@@ -74,8 +74,8 @@ function run() {
                     statusMsgs.push(obj.IDS2Web[g].text); // 運行情報のテキスト
                 }
                 // IDS2Web.lengthとtif.lengthとpif.lengthは全て同じ扱い。振替輸
-                // 送パターンがどの場所に複数格納されていようと、でもHP上でのレ
-                // イアウトは同じで、複数枚の振替輸送一覧の画像が並ぶだけ。
+                // 送パターンがどの場所に複数格納されていようと、HP上でのレイア
+                // ウトは同じで、複数枚の振替輸送一覧の画像が並ぶだけ。
                 for (var h = 0; h < obj.IDS2Web[g].tif.length; h++) {
                     for (var j = 0; j < obj.IDS2Web[g].tif[h].pif.length; j++) {
                         // 万一obj.IDS2Web[g].tif[h].pif[j].ptnに何も入っていな
