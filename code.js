@@ -1,7 +1,5 @@
 // まずスクリプトプロパティに以下の値を格納しておくこと。
 // 'A_DST_EMAIL_ADDR' = 運行情報送信先のメールアドレス
-// 'LAST_UPDATED_FROM_THE_PROPERTY' = '0'
-// 値は'0'でなくても構わないが、''はNG。何か値を入れること。
 
 /** 
  * @description [UNRELEASED] A script for Google Apps Script to retrieve Seibu
@@ -13,11 +11,13 @@
 
 function run() {
     try {
-        var res = UrlFetchApp.
-            fetch('https://www.seiburailway.jp/api/v1/servicestatus.jsonp');
+        var res = UrlFetchApp.fetch(
+            'https://www.seiburailway.jp/api/v1/servicestatus.jsonp',
+            { muteHttpExceptions: true }
+        );
         /** @type {boolean} */
         var wasFailureToFetch = res.getResponseCode() !== 200;
-        if (wasFailureToFetch) throw new Error('Failed to fetch.');
+        if (wasFailureToFetch) return;
         var jsonp = res.getContentText('UTF-8');
         if (!jsonp) return; // 万一jsonpに何も入っていなかったときのバグ防止
         var json = jsonp.jsonp2json();
@@ -31,8 +31,7 @@ function run() {
         //                                 @type {string}
         // obj.IDS2Web[].tif[].pif[].ptn ：振替輸送パターンの番号
         //                                 @type {string}
-        // obj.IDS2Web[].tif_all         ：振替輸送パターンの数だと思われる。HP
-        //                                 では使用されず
+        // obj.IDS2Web[].tif_all         ：振替輸送パターンの数 HPでは使用されず
         //                                 @type {number}
         // obj.IDS2Web[0].time           ：最終更新時刻。IDS2WebPc.gifのURLクエ
         //                                 リパラメータにのみ使われる。
@@ -43,13 +42,22 @@ function run() {
         // 万一obj.IDS2Web、obj.IDS2Web[0]、obj.IDS2Web[0].timeに何も入っていな
         // かったときのバグ防止（HPを見る限りはありえないが念のためチェック）
         if (!obj.IDS2Web || !obj.IDS2Web[0] || !obj.IDS2Web[0].time) return;
-        var lastUpdated = obj.IDS2Web[0].time;
-        const LAST_UPDATED_FROM_THE_PROPERTY =
+        var lastUpdatedStr = obj.IDS2Web[0].time;
+        var lastUpdatedNum = Number(lastUpdatedStr);
+        const LAST_UPDATED_NUM_FROM_THE_PROPERTY =
             PropertiesService.getScriptProperties().
-            getProperty('LAST_UPDATED_FROM_THE_PROPERTY');
-        /** @type {boolean} */
-        var isNewStatus = lastUpdated != LAST_UPDATED_FROM_THE_PROPERTY; 
-      
+                getProperty('LAST_UPDATED_NUM_FROM_THE_PROPERTY');
+        if (!LAST_UPDATED_NUM_FROM_THE_PROPERTY) {
+            // もしLAST_UPDATED_NUM_FROM_THE_PROPERTYというプロパティが見つから
+            // なかったら（i.e. nullだったら）そのまま進む（i.e. 初回実行時には
+            // 実行するということ）
+            var isNewStatus = true;
+        } else {
+            /** @type {boolean} */
+            var isNewStatus =
+                lastUpdatedNum > LAST_UPDATED_NUM_FROM_THE_PROPERTY;
+        }
+        
         // もし最終更新時刻が変わっていなかったら終了
         if (!isNewStatus) {
             return;
@@ -121,27 +129,30 @@ function run() {
              */
             var noAlternatives = alternativeTexts.length == 0;
             if (noAlternatives) { // 振替輸送がないとき
-                var bodyWithoutHead = [
-                    formattedTime(lastUpdated) + ' 現在',
-                    ,
-                    statusMsgs.join('<br /><br />')
-                ].join('<br />');
+                var bodyWithoutHeadOrFormattedTime =
+                    statusMsgs.join('<br /><br />');
             } else { // 振替輸送が１つ以上あるとき
-                var bodyWithoutHead = [
-                    formattedTime(lastUpdated) + ' 現在',
-                    ,
+                var bodyWithoutHeadOrFormattedTime = [
                     statusMsgs.join('<br /><br />'),
                     ,
                     alternativeTexts.join('<br /><br />')
                 ].join('<br />');
             }
 
-            const BODY_WITHOUT_HEAD_FROM_THE_PROPERTY =
-                PropertiesService.getScriptProperties().
-                getProperty('BODY_WITHOUT_HEAD_FROM_THE_PROPERTY');
+            const BODY_WITHOUT_HEAD_OR_FORMATTED_TIME_FROM_THE_PROPERTY =
+                PropertiesService.getScriptProperties().getProperty(
+                    'BODY_WITHOUT_HEAD_OR_FORMATTED_TIME_FROM_THE_PROPERTY'
+                );
 
             var isNewBody =
-                bodyWithoutHead != BODY_WITHOUT_HEAD_FROM_THE_PROPERTY;
+                bodyWithoutHeadOrFormattedTime !=
+                    BODY_WITHOUT_HEAD_OR_FORMATTED_TIME_FROM_THE_PROPERTY;
+            
+            var bodyWithoutHead = [
+                formattedTime(lastUpdatedStr) + ' 現在',
+                ,
+                bodyWithoutHeadOrFormattedTime
+            ].join('<br />');
 
             if(isNewBody) { // もし運行情報が変わっていたら以下を実行する
                 // 運行情報をメールで送信する
@@ -151,15 +162,17 @@ function run() {
                     setProperty('TEXT_' + formattedTime('now'), jsonp);
                 // 現在の運行情報をスクリプトプロパティに格納しておく
                 PropertiesService.getScriptProperties().
-                    setProperty('BODY_WITHOUT_HEAD_FROM_THE_PROPERTY',
-                                lastUpdated);
+                    setProperty(
+                        'BODY_WITHOUT_HEAD_OR_FORMATTED_TIME_FROM_THE_PROPERTY',
+                        bodyWithoutHeadOrFormattedTime
+                    );
             }
 
             // 現在の時刻をスクリプトプロパティに格納しておく
             PropertiesService.getScriptProperties().
-                setProperty('LAST_UPDATED_FROM_THE_PROPERTY', lastUpdated);
-
-            
+                setProperty(
+                    'LAST_UPDATED_NUM_FROM_THE_PROPERTY', lastUpdatedNum
+                );
         }
         return; // とりあえずデバッグ用に追加した。
     } catch(e) {
